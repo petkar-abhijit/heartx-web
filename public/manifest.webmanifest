@@ -1,0 +1,12 @@
+{
+  "name": "HeartX",
+  "short_name": "HeartX",
+  "description": "Your companion for mental wellness",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fdf6ed",
+  "theme_color": "#fb4a59",
+  "icons": [
+    { "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
