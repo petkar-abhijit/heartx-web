@@ -157,9 +157,6 @@ function ProfilePage() {
       </form>
 
       {/* Logout */}
-      <Button variant="outline" className="mt-4 w-full" onClick={logout}>
-        Log out
-      </Button>
     </AppShell>
   );
 }

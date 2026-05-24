@@ -48,6 +48,7 @@ export function AppShell({ children, title, back }: Props) {
               variant="ghost"
               size="icon"
               aria-label="Logout"
+              title="Logout"
               onClick={() => {
                 logout();
 

@@ -3,9 +3,10 @@ import * as React from "react";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch, ApiError, tokenStore } from "@/lib/api";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/diary")({
   component: DiaryPage,
@@ -17,7 +18,15 @@ interface DiaryEntry {
   text: string;
 }
 
+interface ConfessionResponse {
+  confessionId: string;
+  confession: string;
+  confessionDate: string;
+}
+
 function DiaryPage() {
+  const { user, updateProfile, logout } = useAuth();
+  const [loginId, setLoginId] = React.useState(user?.loginId ?? "");
   const [entries, setEntries] = React.useState<DiaryEntry[]>([]);
   const [text, setText] = React.useState("");
   const [loading, setLoading] = React.useState(true);
@@ -26,47 +35,71 @@ function DiaryPage() {
 
   React.useEffect(() => {
     let cancel = false;
-    (async () => {
-      try {
-        const data = await apiFetch<DiaryEntry[]>("/diary");
-        if (!cancel) setEntries(data);
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 404) {
-          setEntries([]);
-        } else {
-          // soft-fail so UI is usable while backend isn't reachable
-          setEntries([]);
-        }
-      } finally {
-        if (!cancel) setLoading(false);
-      }
-    })();
+
+    if (loginId) {
+      loadEntries();
+    }
+
     return () => {
       cancel = true;
     };
-  }, []);
+  }, [loginId]);
+
+  const loadEntries = async () => {
+    try {
+      setLoading(true);
+
+      const response = await apiFetch<{ confessionDetails: ConfessionResponse[] }>("/confessions",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            loginId,
+            token: tokenStore.get(),
+          }),
+        }
+      );
+
+      console.log("CONFESSIONS API RESPONSE:", response);
+
+      const mapped: DiaryEntry[] = response.confessionDetails.map((item) => ({
+        id: item.confessionId,
+        text: item.confession,
+        date: item.confessionDate,
+      }));
+
+      setEntries(mapped);
+    } catch (err) {
+      console.error(err);
+      setEntries([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const save = async () => {
     if (!text.trim()) return;
+
     setSaving(true);
+
     try {
-      const created = await apiFetch<DiaryEntry>("/diary", {
+      await apiFetch("/saveconfession", {
         method: "POST",
-        body: JSON.stringify({ text, date: today.toISOString() }),
+        body: JSON.stringify({
+          confession: text,
+          loginId,
+          token: tokenStore.get(),
+        }),
       });
-      setEntries((p) => [created, ...p]);
+
       setText("");
+
+      await loadEntries();
+
       toast.success("Entry saved");
-    } catch {
-      // optimistic local fallback so user still sees their entry
-      const created: DiaryEntry = {
-        id: crypto.randomUUID(),
-        date: today.toISOString(),
-        text,
-      };
-      setEntries((p) => [created, ...p]);
-      setText("");
-      toast.message("Saved locally — will sync when backend is online");
+    } catch (err) {
+      console.error(err);
+
+      toast.error("Failed to save entry");
     } finally {
       setSaving(false);
     }
@@ -76,8 +109,8 @@ function DiaryPage() {
     <AppShell title="My Diary" back>
       <section className="rounded-2xl border bg-card p-5 shadow-sm">
         <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-base font-semibold">New confession</h2>
-          <span className="text-xs text-muted-foreground">{format(today, "EEEE, dd MMM yyyy")}</span>
+          <h2 className="text-base font-semibold">New Thoughts/Confession</h2>
+          <span className="text-xs text-muted-foreground">{format(today, "EEEE, dd MMM yyyy . p")}</span>
         </div>
         <Textarea
           placeholder="What's on your mind today? Pour your thoughts here…"
@@ -100,7 +133,7 @@ function DiaryPage() {
           {entries.map((e) => (
             <li key={e.id} className="rounded-2xl border bg-card p-4 shadow-sm">
               <div className="mb-1 text-xs text-muted-foreground">
-                {format(new Date(e.date), "EEEE, dd MMM yyyy · p")}
+                {format(new Date(e.date), "EEEE, dd MMM yyyy . p")}
               </div>
               <p className="whitespace-pre-wrap text-sm leading-relaxed">{e.text}</p>
             </li>
